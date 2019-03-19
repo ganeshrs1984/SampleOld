@@ -1,0 +1,23 @@
+public enum EnumLoggingKeys {
+
+    TRANSACTION("transactionId"),
+    HTTPSTATUS("httpStatus="),
+    EXCEPTION("exception"),
+    RESPONSE("response"),
+    REQUESTJSON("requestJson"),
+    RESPONSEJSON("responseJson"),
+    REQUESTURI("requestURI"),
+    HEADERS("headers"),
+    QUERYPARAMS("queryParams");
+
+    private String value;
+
+    EnumLoggingKeys(String value) {
+        this.value = value;
+    }
+
+    public String getValue() {
+        return value;
+    }
+
+}

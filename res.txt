@@ -1,0 +1,31 @@
+ControllerAdvice
+public class ResponseInterceptor implements ResponseBodyAdvice<Object> {
+
+    private final static Logger LOGGER = LoggerFactory.getLogger(ResponseInterceptor.class);
+
+    @Override
+    public boolean supports(MethodParameter returnType,
+                            Class<? extends HttpMessageConverter<?>> converterType) {
+
+        return true;
+    }
+
+
+    @Override
+    public Object beforeBodyWrite(Object body, MethodParameter returnType,
+                                  MediaType selectedContentType,
+                                  Class<? extends HttpMessageConverter<?>> selectedConverterType,
+                                  ServerHttpRequest request, ServerHttpResponse response)  {
+
+        ObjectWriter ow = new ObjectMapper().writer().withDefaultPrettyPrinter();
+        try {
+            String jsonResponse = ow.writeValueAsString(body);
+            LOGGER.info(LogUtil.formatKeyValue(EnumLoggingKeys.RESPONSEJSON, jsonResponse, false));
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
+
+        return body;
+    }
+
+}

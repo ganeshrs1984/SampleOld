@@ -1,0 +1,115 @@
+@Component
+public class RequestInterceptor extends HttpTraceFilter {
+    private final static Logger LOGGER = LoggerFactory.getLogger(RequestInterceptor.class);
+
+    private static final Set<String> EXCLUDED_HEADERS = new HashSet<>(Arrays.asList("cookie", "authorization"));
+
+    private static final String PATH = "path";
+    private static final String STATUS = "status";
+    private static final String PARAMETERS = "parameters";
+    private static final String HEADERS = "headers";
+    private static final String METHOD = "method";
+
+    /**
+     * Create a new {@link HttpTraceFilter} instance.
+     *
+     * @param repository the trace repository
+     * @param tracer     used to trace exchanges
+     */
+    public RequestInterceptor(HttpTraceRepository repository, HttpExchangeTracer tracer) {
+        super(repository, tracer);
+    }
+
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        String transactionId = UUID.randomUUID().toString();
+        MDC.put(EnumLoggingKeys.TRANSACTION.getValue(), transactionId);
+        super.doFilterInternal(request, response, filterChain);
+        Map<String, Object> trace = getTrace(request, response);
+        writeLogFromTrace(trace);
+    }
+
+
+    private Map<String, Object> getTrace(HttpServletRequest request, HttpServletResponse response) {
+        Map<String, Object> trace = new LinkedHashMap<String, Object>();
+        trace.put(STATUS, response.getStatus());
+        trace.put(PATH, request.getRequestURI());
+        trace.put(PARAMETERS, request.getQueryString());
+        trace.put(HEADERS, getRequestHeaders(request));
+        trace.put(METHOD, request.getMethod());
+
+        return trace;
+    }
+
+    private void writeLogFromTrace(Map trace) {
+
+        StringBuilder logString = new StringBuilder();
+        setStatusCode((Integer) trace.get(STATUS), logString);
+        setRequestURI(trace.get(PATH).toString(), logString);
+        setQueryStringParams((String) trace.get(PARAMETERS), logString);
+        setRequestHeaders(trace.get(HEADERS).toString(), logString);
+        setLogLevel((Integer) trace.get(STATUS), logString);
+    }
+
+    private void setLogLevel(Integer status, StringBuilder logString) {
+        if (status >= 200 && status < 300) {
+            LOGGER.info(logString.toString());
+        } else if (status >= 400 && status < 500) {
+            LOGGER.warn(logString.toString());
+        } else {
+            LOGGER.error(logString.toString());
+        }
+    }
+
+    private void setStatusCode(Integer status, StringBuilder logString) {
+        logString.append(LogUtil.formatKeyValue(EnumLoggingKeys.RESPONSE, String.valueOf(status), false));
+    }
+
+    private void setRequestURI(String requestURI, StringBuilder logString) {
+        logString.append(LogUtil.formatKeyValue(EnumLoggingKeys.REQUESTURI, requestURI, true));
+    }
+
+    private void setRequestHeaders(String headers, StringBuilder logString) {
+        logString.append(LogUtil.formatKeyValue(EnumLoggingKeys.HEADERS, headers, true));
+    }
+
+    private void setQueryStringParams(String uriQueryParams, StringBuilder logString) {
+        if (uriQueryParams != null) {
+            String params[] = uriQueryParams.split("&");
+            Map<String, String> map = new HashMap<>();
+
+            for (String p : params) {
+                String pair[] = p.trim().split("=");
+                String key = pair[0];
+                String value = pair[1];
+                map.put(key, addOrAppend(map.get(key), value));
+            }
+            String formattedQueryParams = map.entrySet()
+                    .stream()
+                    .map(entry -> entry.getKey() + "=" + entry.getValue())
+                    .collect(Collectors.joining(" , "));
+            logString.append(LogUtil.formatKeyValue(EnumLoggingKeys.QUERYPARAMS, formattedQueryParams, true));
+        }
+    }
+
+    private String addOrAppend(String root, String value) {
+        StringBuilder builder = new StringBuilder();
+        if (root == null) {
+            return builder.append(value).toString();
+        }
+        return builder.append(root).append(",").append(value).toString();
+    }
+
+    private Map<String, Object> getRequestHeaders(HttpServletRequest request) {
+        Map<String, Object> headers = new LinkedHashMap<String, Object>();
+        Enumeration<String> names = request.getHeaderNames();
+        while (names.hasMoreElements()) {
+            String name = names.nextElement();
+            if (!EXCLUDED_HEADERS.contains(name.toLowerCase())) {
+                headers.put(name, request.getHeader(name));
+            }
+        }
+        return headers;
+    }
+}
